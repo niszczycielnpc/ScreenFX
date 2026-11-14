@@ -144,6 +144,8 @@ and skips OnionHEN's own daemon targets.
 
 ## Credits
 
+- Holendersky - assisting Claude
+- Claude (Anthropic) - AI developer
 - [OnionHEN](https://github.com/aydencharles/onionHEN) and the
   [OnionHEN Plugin SDK](https://github.com/OnionBuddies/onionHEN-plugin-sdk):
   plugin system, remote ELF loader, and the monitor bar this drawing code follows
