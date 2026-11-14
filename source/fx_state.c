@@ -43,6 +43,8 @@ int fx_state_publish(const fx_settings *s) {
         st.tint_rgba[3] = pct_to_alpha(s->tint_strength * 40 / 100);
     }
     st.combo = (uint8_t)s->combo;
+    st.preset = (uint8_t)s->preset;
+    st.has_custom = (uint8_t)s->has_custom;
 
     FILE *f = fopen(FX_STATE_PATH ".tmp", "wb");
     if (!f) return -1;
@@ -55,14 +57,19 @@ int fx_state_publish(const fx_settings *s) {
     return 0;
 }
 
-fx_request fx_state_take_request(void) {
+fx_request fx_state_take_request(int *value) {
     FILE *f = fopen(FX_REQUEST_PATH, "r");
     if (!f) return FX_REQUEST_NONE;
     char word[32] = {0};
     if (!fgets(word, sizeof(word), f)) word[0] = '\0';
     fclose(f);
     (void)remove(FX_REQUEST_PATH);
-    word[strcspn(word, "\r\n ")] = '\0';
+    word[strcspn(word, "\r\n")] = '\0';
+    int number = 0;
+    if (sscanf(word, "set %d", &number) == 1 && number >= -1 && number < FX_PRESET_COUNT) {
+        *value = number;
+        return FX_REQUEST_SET;
+    }
     if (strcmp(word, "toggle") == 0) return FX_REQUEST_TOGGLE;
     if (strcmp(word, "next_preset") == 0) return FX_REQUEST_NEXT_PRESET;
     return FX_REQUEST_NONE;

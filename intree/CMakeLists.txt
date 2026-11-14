@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.20)
 project(screenfx C CXX ASM)
 
 set(ONION_PLUGIN_ID SCFX00001)
-set(ONION_PLUGIN_VERSION 0.22)
+set(ONION_PLUGIN_VERSION 0.30)
 set(ONION_PLUGIN_NAME "ScreenFX")
 
 get_filename_component(SCREENFX_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)

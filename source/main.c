@@ -23,7 +23,8 @@
 #include "fx_ui.h"
 #include "plugin_config.h"
 
-#define CONNECT_ATTEMPTS 30
+/* At console start the plugin can be launched before the daemon socket is up. */
+#define CONNECT_ATTEMPTS 480
 #define CONNECT_RETRY_US (250 * 1000)
 #define EVENT_POLL_US (50 * 1000)
 #define INJECT_POLL_TICKS 40 /* every ~2 s */
@@ -136,11 +137,23 @@ static void stop_plugin(plugin_app *app) {
     (void)fx_state_publish(&off);
 }
 
-static void handle_combo_request(plugin_app *app, fx_request request) {
+static void handle_request(plugin_app *app, fx_request request, int value) {
     char text[96];
+    int notify = app->settings.notify;
     if (request == FX_REQUEST_TOGGLE) {
         app->settings.enabled = !app->settings.enabled;
         snprintf(text, sizeof(text), "ScreenFX %s", app->settings.enabled ? "on" : "off");
+    } else if (request == FX_REQUEST_SET) {
+        /* From the in-game menu, which is its own feedback: no popup. */
+        notify = 0;
+        if (value < 0) {
+            app->settings.enabled = 0;
+            snprintf(text, sizeof(text), "menu: off");
+        } else {
+            fx_settings_apply_preset(&app->settings, value);
+            app->settings.enabled = 1;
+            snprintf(text, sizeof(text), "menu: %s", fx_preset_name(value));
+        }
     } else {
         int next = app->settings.preset + 1;
         if (next >= FX_PRESET_COUNT) next = FX_PRESET_CRT; /* skip Custom while cycling */
@@ -150,8 +163,8 @@ static void handle_combo_request(plugin_app *app, fx_request request) {
     }
     commit(app);
     fx_ui_sync(&app->services, app->ui_handle, &app->settings);
-    log_message(app, "[%s] combo: %s\n", PLUGIN_ID, text);
-    if (app->settings.notify) send_notification(app, text);
+    log_message(app, "[%s] request: %s\n", PLUGIN_ID, text);
+    if (notify) send_notification(app, text);
 }
 
 static void poll_renderer(plugin_app *app) {
@@ -171,8 +184,9 @@ static void poll_renderer(plugin_app *app) {
 static int run_event_loop(plugin_app *app) {
     int inject_ticks = INJECT_POLL_TICKS; /* check right away on start */
     while (running) {
-        const fx_request request = fx_state_take_request();
-        if (request != FX_REQUEST_NONE) handle_combo_request(app, request);
+        int value = 0;
+        const fx_request request = fx_state_take_request(&value);
+        if (request != FX_REQUEST_NONE) handle_request(app, request, value);
 
         if (app->settings.renderer && ++inject_ticks >= INJECT_POLL_TICKS) {
             inject_ticks = 0;

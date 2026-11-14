@@ -33,37 +33,59 @@ __asm__(
     "fx_renderer_elf_end:\n"
     ".text\n");
 
-static pid_t g_handled_pid;   /* ShellUI instance we already dealt with */
-static time_t g_loaded_at;    /* when we last loaded the renderer */
-static pid_t g_waiting_pid;   /* instance we already reported as waiting */
-static int g_verify_polls;    /* polls left before checking the renderer came up */
+#define LOAD_ATTEMPTS 5
+#define RETRY_SECONDS 10
+/* The renderer keeps retrying its own setup for two minutes (console start). */
+#define READY_TIMEOUT_SECONDS 150
+
+static pid_t g_done_pid;      /* ShellUI instance we are finished with */
+static pid_t g_target_pid;    /* ShellUI instance we are working on */
+static pid_t g_waiting_pid;   /* instance already reported as waiting */
+static int g_attempts;        /* loads tried into g_target_pid */
+static time_t g_next_attempt; /* earliest time for the next load */
+static time_t g_ready_since;  /* loaded; waiting for the renderer's marker */
+static time_t g_loaded_at;    /* last successful load, for the crash guard */
 
 fx_inject_result fx_inject_poll(char *detail, size_t detail_size) {
     const pid_t shellui = onion_find_pid("SceShellUI");
-    if (shellui > 0 && shellui == g_handled_pid && g_verify_polls > 0 && --g_verify_polls == 0) {
-        const bool ready = onion_ready_matches_pid(FX_READY_NAME, shellui);
-        const bool nodir = onion_ready_matches_pid(FX_READY_NAME "_nodir", shellui);
-        snprintf(detail, detail_size, "%s", ready ? "renderer is up and hooked"
-                 : nodir ? "renderer cannot see the screenfx folder from inside ShellUI"
-                         : "renderer did not come up; check renderer.log");
-        return ready ? FX_INJECT_LOADED : FX_INJECT_FAILED;
-    }
-    if (shellui <= 0 || shellui == g_handled_pid) return FX_INJECT_NOTHING;
+    if (shellui <= 0 || shellui == g_done_pid) return FX_INJECT_NOTHING;
+    const time_t now = time(NULL);
 
-    /* A renderer from an earlier run of this plugin is still in there. */
+    /* Up and hooked: either ours just now, or left by an earlier plugin run. */
     if (onion_ready_matches_pid(FX_READY_NAME, shellui)) {
-        g_handled_pid = shellui;
-        return FX_INJECT_NOTHING;
+        const bool ours = g_ready_since != 0 && g_target_pid == shellui;
+        g_done_pid = shellui;
+        g_ready_since = 0;
+        if (!ours) return FX_INJECT_NOTHING;
+        snprintf(detail, detail_size, "renderer is up and hooked");
+        return FX_INJECT_LOADED;
     }
 
-    /* New ShellUI process. If the previous one died soon after we loaded
-     * into it, assume we caused that and stop. */
-    if (g_loaded_at != 0 && time(NULL) - g_loaded_at < CRASH_WINDOW_SECONDS) {
-        g_handled_pid = shellui;
-        g_loaded_at = 0;
-        snprintf(detail, detail_size, "ShellUI restarted within %d s of loading; giving up",
-                 CRASH_WINDOW_SECONDS);
-        return FX_INJECT_GUARD_TRIPPED;
+    if (shellui != g_target_pid) {
+        /* New ShellUI process. If the previous one died soon after we loaded
+         * into it, assume we caused that and stop. */
+        if (g_loaded_at != 0 && now - g_loaded_at < CRASH_WINDOW_SECONDS) {
+            g_done_pid = shellui;
+            g_loaded_at = 0;
+            snprintf(detail, detail_size, "ShellUI restarted within %d s of loading; giving up",
+                     CRASH_WINDOW_SECONDS);
+            return FX_INJECT_GUARD_TRIPPED;
+        }
+        g_target_pid = shellui;
+        g_attempts = 0;
+        g_next_attempt = 0;
+        g_ready_since = 0;
+    }
+
+    if (g_ready_since != 0) {
+        const bool nodir = onion_ready_matches_pid(FX_READY_NAME "_nodir", shellui);
+        if (!nodir && now - g_ready_since < READY_TIMEOUT_SECONDS) return FX_INJECT_NOTHING;
+        g_done_pid = shellui;
+        g_ready_since = 0;
+        snprintf(detail, detail_size, "%s",
+                 nodir ? "renderer cannot see the screenfx folder from inside ShellUI"
+                       : "renderer did not come up; check renderer.log");
+        return FX_INJECT_FAILED;
     }
 
     /* The renderer chains onto OnionHEN's frame hook, so that must exist first. */
@@ -74,25 +96,36 @@ fx_inject_result fx_inject_poll(char *detail, size_t detail_size) {
                  (int)shellui);
         return FX_INJECT_WAITING;
     }
+    if (now < g_next_attempt) return FX_INJECT_NOTHING;
 
-    g_handled_pid = shellui;
     const size_t size = (size_t)(fx_renderer_elf_end - fx_renderer_elf_start);
     uint8_t *copy = malloc(size);
     if (!copy) {
+        g_done_pid = shellui;
         snprintf(detail, detail_size, "out of memory (%zu bytes)", size);
         return FX_INJECT_FAILED;
     }
     memcpy(copy, fx_renderer_elf_start, size);
+    ++g_attempts;
     const bool ok = Inject_Toolbox((int)shellui, copy);
     free(copy);
 
     if (!ok) {
-        snprintf(detail, detail_size, "load into ShellUI pid %d failed", (int)shellui);
-        return FX_INJECT_FAILED;
+        /* ShellUI can be busy (another debugger attached) right after start. */
+        if (g_attempts >= LOAD_ATTEMPTS) {
+            g_done_pid = shellui;
+            snprintf(detail, detail_size, "load into ShellUI pid %d failed %d times; giving up",
+                     (int)shellui, g_attempts);
+            return FX_INJECT_FAILED;
+        }
+        g_next_attempt = now + RETRY_SECONDS;
+        snprintf(detail, detail_size, "load into ShellUI pid %d failed (try %d of %d); retrying",
+                 (int)shellui, g_attempts, LOAD_ATTEMPTS);
+        return FX_INJECT_WAITING;
     }
-    g_loaded_at = time(NULL);
-    g_verify_polls = 5; /* ~10 s */
-    snprintf(detail, detail_size, "loaded into ShellUI pid %d (%zu bytes); see %s", (int)shellui,
-             size, FX_RENDERER_LOG_PATH);
+    g_loaded_at = now;
+    g_ready_since = now;
+    snprintf(detail, detail_size, "loaded into ShellUI pid %d (try %d, %zu bytes); see %s",
+             (int)shellui, g_attempts, size, FX_RENDERER_LOG_PATH);
     return FX_INJECT_LOADED;
 }

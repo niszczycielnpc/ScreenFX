@@ -50,7 +50,7 @@ static const field k_fields[] = {
     {"renderer", "Draw on screen (experimental)",
      "Loads the ScreenFX drawing module into the system UI. Turns itself off if the UI restarts right after loading.",
      FIELD_TOGGLE, OFF(renderer), NULL, 0},
-    {"enabled", "Effects enabled", "Master switch. The button combo flips this in game.",
+    {"enabled", "Effects enabled", "Master switch. Also in the in-game menu (Off) and on a held combo.",
      FIELD_TOGGLE, OFF(enabled), NULL, 0},
     {"preset", "Preset", "Loads a ready-made look. Changing any effect below switches to Custom.",
      FIELD_LIST, OFF(preset), OPTS(k_presets)},
@@ -73,7 +73,7 @@ static const field k_fields[] = {
     {"dim", "Dim picture", "Darkens everything, for late-night play.", FIELD_LIST, OFF(dim),
      OPTS(k_dim)},
     {"combo", "Button combo",
-     "Press to switch effects on or off. Hold for one second to jump to the next preset.",
+     "Press in game to open the ScreenFX menu. Hold for one second to switch effects on or off.",
      FIELD_LIST, OFF(combo), OPTS(k_combos)},
     {"notify", "Show notifications", "Popup when the combo changes something.", FIELD_TOGGLE,
      OFF(notify), NULL, 0},
@@ -196,6 +196,7 @@ onion_status fx_ui_apply_event(onion_ui_handle handle, const onion_ui_event_v1 *
             if (f->offset != OFF(enabled) && f->offset != OFF(combo) &&
                 f->offset != OFF(notify) && f->offset != OFF(renderer)) {
                 s->preset = FX_PRESET_CUSTOM;
+                fx_settings_remember_custom(s);
             }
         }
         fx_settings_clamp(s);

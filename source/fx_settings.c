@@ -30,17 +30,20 @@ void fx_settings_clamp(fx_settings *s) {
     s->combo = clampi(s->combo, 0, FX_COMBO_COUNT - 1);
     s->notify = !!s->notify;
     s->renderer = !!s->renderer;
+    s->has_custom = !!s->has_custom;
 }
 
 const char *fx_preset_name(int preset) {
-    static const char *const names[FX_PRESET_COUNT] = {
-        "Custom", "CRT TV", "Arcade", "Night", "Cinema 21:9", "Green phosphor"};
+    static const char *const names[FX_PRESET_COUNT] = FX_PRESET_NAMES;
     return names[clampi(preset, 0, FX_PRESET_COUNT - 1)];
 }
 
 void fx_settings_apply_preset(fx_settings *s, int preset) {
     s->preset = clampi(preset, 0, FX_PRESET_COUNT - 1);
-    if (s->preset == FX_PRESET_CUSTOM) return;
+    if (s->preset == FX_PRESET_CUSTOM) {
+        if (s->has_custom) memcpy(&s->scanlines, s->custom, sizeof(s->custom));
+        return;
+    }
 
     s->scanlines = 0; s->scan_strength = 45; s->scan_pitch = 4;
     s->vignette = 0;  s->vig_strength = 30;
@@ -70,10 +73,19 @@ void fx_settings_apply_preset(fx_settings *s, int preset) {
     }
 }
 
+void fx_settings_remember_custom(fx_settings *s) {
+    memcpy(s->custom, &s->scanlines, sizeof(s->custom));
+    s->has_custom = 1;
+}
+
+_Static_assert(offsetof(fx_settings, dim) - offsetof(fx_settings, scanlines) ==
+                   (FX_LOOK_FIELDS - 1) * sizeof(int),
+               "look fields must stay contiguous");
+
 static const struct { const char *key; size_t offset; } k_fields[] = {
 #define F(name) {#name, offsetof(fx_settings, name)}
     F(enabled), F(preset), F(scanlines), F(scan_strength), F(scan_pitch), F(vignette),
-    F(vig_strength), F(tint), F(tint_strength), F(bars), F(dim), F(combo), F(notify), F(renderer),
+    F(vig_strength), F(tint), F(tint_strength), F(bars), F(dim), F(combo), F(notify), F(renderer), F(has_custom),
 #undef F
 };
 
@@ -85,6 +97,12 @@ int fx_settings_load(const char *path, fx_settings *s) {
         char *eq = strchr(line, '=');
         if (!eq || line[0] == '#' || line[0] == ';' || line[0] == '[') continue;
         *eq = '\0';
+        int custom_index = -1;
+        if (sscanf(line, "custom%d", &custom_index) == 1 && custom_index >= 0 &&
+            custom_index < FX_LOOK_FIELDS) {
+            s->custom[custom_index] = atoi(eq + 1);
+            continue;
+        }
         for (size_t i = 0; i < sizeof(k_fields) / sizeof(k_fields[0]); ++i) {
             if (strcmp(line, k_fields[i].key) == 0) {
                 *(int *)((char *)s + k_fields[i].offset) = atoi(eq + 1);
@@ -94,6 +112,8 @@ int fx_settings_load(const char *path, fx_settings *s) {
     }
     fclose(f);
     fx_settings_clamp(s);
+    /* Settings saved before 0.30 have a Custom look but no snapshot of it. */
+    if (s->preset == FX_PRESET_CUSTOM && !s->has_custom) fx_settings_remember_custom(s);
     return 0;
 }
 
@@ -106,6 +126,7 @@ int fx_settings_save(const char *path, const fx_settings *s) {
         fprintf(f, "%s=%d\n", k_fields[i].key,
                 *(const int *)((const char *)s + k_fields[i].offset));
     }
+    for (int i = 0; i < FX_LOOK_FIELDS; ++i) fprintf(f, "custom%d=%d\n", i, s->custom[i]);
     if (fclose(f) != 0) { remove(tmp); return -1; }
     if (rename(tmp, path) != 0) { remove(tmp); return -1; }
     return 0;

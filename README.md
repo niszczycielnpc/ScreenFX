@@ -4,7 +4,7 @@ Screen effects for any PS5 game, as a plugin for [OnionHEN](https://github.com/a
 scanlines, vignette, colour tint, black bars and dimming, drawn over the game and
 switched on and off with a button combo.
 
-> **Status: 0.22, experimental.** Tested on a single console (PS5 firmware 9.60).
+> **Status: 0.30, experimental.** Tested on a single console (PS5 firmware 9.60).
 > It loads a small module into the system UI, so treat it as a beta and read
 > [Safety](#safety) first.
 
@@ -16,7 +16,7 @@ switched on and off with a button combo.
 - **Black bars**: cinema 21:9 or retro 4:3
 - **Dim** for late-night play
 - **Presets**: CRT TV, Arcade, Night, Cinema 21:9, Green phosphor, or your own (Custom)
-- **Button combo** in game: tap to switch effects on/off, hold one second for the next preset
+- **In-game menu** on a button combo: pick a preset or switch effects off without leaving the game
 - Settings page inside the OnionHEN Toolbox, saved between sessions
 - Works in every game: nothing is patched in the game itself
 
@@ -46,16 +46,25 @@ To update, repeat steps 2 and 3 with the new file.
 4. Pick a preset, or change the individual effects. Changing any effect by hand
    switches the preset to *Custom*.
 
-### Button combo
+### In-game menu
 
-| Action | Result |
+Press the button combo in game to open the ScreenFX menu.
+
+| Input | Result |
 | --- | --- |
-| Tap the combo | Effects on / off |
-| Hold the combo for one second | Next preset |
+| Tap the combo | Open / close the menu |
+| D-pad up / down | Move through *Off* and the presets; the look changes as you move |
+| Circle or Cross | Close the menu |
+| Hold the combo for one second | Effects on / off, without the menu |
+
+The menu closes by itself after about ten seconds without input. *Custom* shows
+up in the list once you have changed an effect by hand on the Toolbox page.
 
 The combo is **L3 + R3** by default. You can change it to *L1 + R1 + Options* or
-*L2 + R2 + Touchpad*, or turn it off, on the ScreenFX page. A notification shows
-what changed (this can be turned off too).
+*L2 + R2 + Touchpad*, or turn it off, on the ScreenFX page.
+
+The game still receives your button presses while the menu is open, so pause the
+game first if that matters.
 
 ### Presets
 
@@ -98,6 +107,7 @@ You use this at your own risk.
 | No ScreenFX page in the Toolbox | Check the file name is exactly `SCFX00001.elf` and that your OnionHEN version supports ELF plugins |
 | Page is there, nothing on screen | Make sure *Draw on screen* and *Effects enabled* are both on, then wait a few seconds in game |
 | Combo does nothing | Check *Button combo* is not set to *Off* and that the game is in the foreground |
+| No menu after updating the plugin | Restart the console: the old drawing module stays loaded until then |
 | *Draw on screen* switched itself off | The system UI restarted right after loading; see the logs below and open an issue |
 
 Logs and files on the console:
@@ -115,8 +125,6 @@ OnionHEN version you use.
 
 Planned for the next version:
 
-- **In-game menu**: open a ScreenFX menu over the game with the button combo,
-  instead of going through the Toolbox
 - **Per-game settings**: remember a separate preset and effect setup for each game
 
 ## Building from source

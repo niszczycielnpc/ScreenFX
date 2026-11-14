@@ -4,9 +4,9 @@
 
 typedef enum fx_inject_result {
     FX_INJECT_NOTHING = 0,   /* nothing to report */
-    FX_INJECT_WAITING,       /* OnionHEN Toolbox not ready in this ShellUI yet (reported once) */
-    FX_INJECT_LOADED,        /* renderer loaded into this ShellUI instance */
-    FX_INJECT_FAILED,        /* load failed; not retried for this instance */
+    FX_INJECT_WAITING,       /* not loaded yet: Toolbox not ready, or a load will be retried */
+    FX_INJECT_LOADED,        /* progress: loaded, then again when the renderer reports ready */
+    FX_INJECT_FAILED,        /* gave up on this ShellUI instance */
     FX_INJECT_GUARD_TRIPPED  /* ShellUI restarted right after a load */
 } fx_inject_result;
 
