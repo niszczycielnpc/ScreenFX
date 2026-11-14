@@ -1,0 +1,13 @@
+#pragma once
+
+#define PLUGIN_ID "@ONION_PLUGIN_ID@"
+#define PLUGIN_VERSION "@ONION_PLUGIN_VERSION@"
+#define PLUGIN_NAME "@ONION_PLUGIN_NAME@"
+#define PLUGIN_LOG_PATH "/data/OnionHEN/@ONION_PLUGIN_ID@.log"
+#define PLUGIN_SETTINGS_PATH "/data/OnionHEN/plugins/@ONION_PLUGIN_ID@.ini"
+
+/* Shared with the ShellUI renderer module (renderer/renderer.cpp). */
+#define FX_SHARED_DIR "/data/OnionHEN/screenfx"
+#define FX_STATE_PATH FX_SHARED_DIR "/state.bin"
+#define FX_REQUEST_PATH FX_SHARED_DIR "/request"
+#define FX_RENDERER_LOG_PATH FX_SHARED_DIR "/renderer.log"
